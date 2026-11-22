@@ -419,12 +419,34 @@ export async function extractWithHtmlParser(targetUrl: string): Promise<Extracte
   }
 }
 
+// Follow URL shortener redirects (t.co, bit.ly, tinyurl, etc.)
+async function resolveRedirects(url: string): Promise<string> {
+  const shorteners = /t\.co|bit\.ly|tinyurl\.com|ow\.ly|short\.link|rb\.gy|is\.gd/i;
+  if (!shorteners.test(url)) return url;
+  try {
+    const res = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    return res.url || url;
+  } catch {
+    return url;
+  }
+}
+
 // Master extraction function
 export async function extractVideo(url: string): Promise<ExtractedVideo> {
-  const trimmed = url.trim();
+  let trimmed = url.trim();
   if (!trimmed) {
     return { success: false, error: "URL tidak boleh kosong." };
   }
+
+  // Follow URL shortener redirects (t.co, bit.ly, etc.)
+  trimmed = await resolveRedirects(trimmed);
 
   // Check if it's already a direct video stream link
   if (trimmed.match(/\.(mp4|webm|mkv)(\?.*)?$/i)) {
